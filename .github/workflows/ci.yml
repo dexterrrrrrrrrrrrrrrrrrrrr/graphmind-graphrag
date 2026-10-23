@@ -33,7 +33,21 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: uv sync --frozen --extra dev
       - run: npm --prefix frontend ci
-      - run: bash scripts/check.sh
+      - name: Backend, frontend and Neo4j checks
+        run: |
+          set +e
+          bash scripts/check.sh > /tmp/graphmind-checks.log 2>&1
+          graphmind_status=$?
+          cat /tmp/graphmind-checks.log
+          if [ "$graphmind_status" -ne 0 ]; then
+            python - <<'PYDIAGNOSTIC'
+          from pathlib import Path
+          details = Path('/tmp/graphmind-checks.log').read_text()[-16000:]
+          details = details.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print('::error title=GraphMind validation failure::' + details)
+          PYDIAGNOSTIC
+          fi
+          exit "$graphmind_status"
         env:
           TEST_NEO4J_URI: bolt://localhost:7767
           TEST_NEO4J_PASSWORD: ci-fixture-password
