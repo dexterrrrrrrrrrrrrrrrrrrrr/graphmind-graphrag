@@ -17,7 +17,7 @@ frontend/playwright-report/
 
 # Local AI weights, stores, credentials and disposable exports
 .ollama/
-models/
+/models/
 *.gguf
 *.safetensors
 *.bin
