@@ -1,0 +1,15 @@
+# Optional overlay for managed cloud proxies. The CA is mounted, never copied into images.
+services:
+  backend:
+    build:
+      secrets: [proxy_ca]
+    environment:
+      SSL_CERT_FILE: /run/proxy-ca.pem
+    volumes:
+      - ${CODEX_PROXY_CERT:?Session proxy CA must be configured}:/run/proxy-ca.pem:ro
+  frontend:
+    build:
+      secrets: [proxy_ca]
+secrets:
+  proxy_ca:
+    file: ${CODEX_PROXY_CERT:?Session proxy CA must be configured}

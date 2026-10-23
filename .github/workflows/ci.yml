@@ -1,0 +1,59 @@
+name: GraphMind checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:5.26-community
+        env:
+          # Ephemeral isolated CI-only fixture; never a deployment credential.
+          NEO4J_AUTH: neo4j/ci-fixture-password
+          NEO4J_server_memory_heap_max__size: 512m
+          NEO4J_server_memory_pagecache_size: 256m
+        ports: [7767:7687]
+        options: >-
+          --health-cmd "wget -q --spider http://localhost:7474"
+          --health-interval 10s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.23'
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: uv sync --frozen --extra dev
+      - run: npm --prefix frontend ci
+      - run: bash scripts/check.sh
+        env:
+          TEST_NEO4J_URI: bolt://localhost:7767
+          TEST_NEO4J_PASSWORD: ci-fixture-password
+          UV_CACHE_DIR: /tmp/uv
+      - run: npx --prefix frontend playwright install --with-deps chromium
+      - name: Browser integration (isolated fixture embeddings, real Neo4j)
+        env:
+          TEST_NEO4J_URI: bolt://localhost:7767
+          TEST_NEO4J_PASSWORD: ci-fixture-password
+        run: |
+          .venv/bin/uvicorn backend.tests.browser_server:app --host 127.0.0.1 --port 8000 > /tmp/backend.log 2>&1 &
+          npm --prefix frontend run dev > /tmp/frontend.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/api/health >/dev/null; then break; fi
+            sleep 1
+          done
+          cd frontend
+          npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failures
+          path: frontend/test-results

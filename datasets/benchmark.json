@@ -1,0 +1,9 @@
+{
+  "version": "graphmind-chain-v1",
+  "questions": [
+    {"id":"one", "question":"Who founded AlphaTech?", "reference_answer":"Rahul Sharma", "question_type":"one-hop", "required_hops":1, "supporting_documents":["01-founder.txt"], "supporting_evidence":["Rahul Sharma founded AlphaTech."], "expected_relationships":[["Rahul Sharma","FOUNDED","AlphaTech"]]},
+    {"id":"two", "question":"Which company did the company founded by Rahul Sharma acquire through its acquisition?", "reference_answer":"DataVision", "question_type":"two-hop", "required_hops":2, "max_depth":2, "supporting_documents":["01-founder.txt","02-acquisition.txt"], "supporting_evidence":["Rahul Sharma founded AlphaTech.","AlphaTech acquired DataVision."], "expected_relationships":[["Rahul Sharma","FOUNDED","AlphaTech"],["AlphaTech","ACQUIRED","DataVision"]]},
+    {"id":"three", "question":"Which organization is indirectly connected to Rahul Sharma through his company's acquisition and subsequent partnership?", "reference_answer":"MedCore", "question_type":"cross-document", "required_hops":3, "supporting_documents":["01-founder.txt","02-acquisition.txt","03-partnership.txt"], "supporting_evidence":["Rahul Sharma founded AlphaTech.","AlphaTech acquired DataVision.","DataVision partnered with MedCore."], "expected_relationships":[["Rahul Sharma","FOUNDED","AlphaTech"],["AlphaTech","ACQUIRED","DataVision"],["DataVision","PARTNERED_WITH","MedCore"]]},
+    {"id":"unanswerable", "question":"Who founded QuantumHarbor?", "reference_answer":null, "question_type":"unanswerable", "required_hops":0, "supporting_documents":[], "supporting_evidence":[], "expected_relationships":[]}
+  ]
+}

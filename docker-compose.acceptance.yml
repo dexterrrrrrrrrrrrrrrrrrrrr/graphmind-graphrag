@@ -1,0 +1,11 @@
+# Docker Compose >=2.24.4. Use a separate project name to isolate Neo4j volumes.
+services:
+  neo4j:
+    ports: !override ["127.0.0.1:7475:7474", "127.0.0.1:7688:7687"]
+  backend:
+    ports: !override ["127.0.0.1:8011:8000"]
+    volumes: !override
+      - "./.data/local-acceptance:/app/.data"
+      - "./.data/models:/app/.data/models"
+  frontend:
+    ports: !override ["127.0.0.1:3001:80"]
