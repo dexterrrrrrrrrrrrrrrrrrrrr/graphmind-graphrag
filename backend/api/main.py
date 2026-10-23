@@ -117,6 +117,7 @@ async def unexpected_error(request, error):
 @app.get("/api/health")
 def health(request: Request) -> dict:
     c = ctx(request)
+    c.ensure_graph()
     graph_ok = False
     try:
         c.graph.driver.verify_connectivity()

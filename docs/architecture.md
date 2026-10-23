@@ -30,7 +30,7 @@ sequenceDiagram
   U->>A: Poll document status
 ```
 
-A failed extraction fails the job and retains its source and safe error metadata. Reprocessing checks model readiness, retains the prior graph until validated replacement, and removes stale response snapshots only after successful replacement. A crash during processing is recorded as interrupted on restart; it never automatically retries inference. One background worker serializes ingestion to avoid duplicate/racing document writes. Jobs are durable in metadata but the execution queue is in-process; scale requires an external job system.
+Unusable response/entity data fails the job and retains its source and safe error metadata. Individual invalid relationship candidates are discarded independently, retaining validated siblings and entities; rejection diagnostics appear in document metadata and the Documents page. Zero valid edges does not imply successful multi-hop extraction. See [extraction recovery](ollama-extraction-recovery.md). Reprocessing checks model readiness, retains the prior graph until validated replacement, and removes stale response snapshots only after successful replacement. A crash during processing is recorded as interrupted on restart; it never automatically retries inference. One background worker serializes ingestion to avoid duplicate/racing document writes. Jobs are durable in metadata but the execution queue is in-process; scale requires an external job system.
 
 ## Identity and provenance
 
@@ -48,7 +48,7 @@ Graph chunks and vector chunks fuse by stable chunk ID. RRF uses `weight/(60+ran
 
 ## Generation
 
-Live providers receive a system policy and JSON-encoded untrusted evidence. A structured answer contains supported claims, citation IDs, and exact supporting quotes. IDs must belong to retrieved context; every cited ID needs an exact excerpt; extraneous/invalid claims are removed. This checks attribution, not entailment. The refusal is constant and explicit. API paths are attached by the retrieval service, never by model output.
+Live providers receive a system policy and JSON-encoded untrusted evidence. A structured answer contains supported claims, citation IDs, and exact supporting quotes. IDs must belong to retrieved context; every cited ID needs an exact excerpt and every supplied quote must match. Blank claims and extraneous/invalid claims are removed. This checks attribution, not entailment. The refusal is constant and explicit. API paths are attached by the retrieval service, never by model output.
 
 Ollama is the sole runtime provider. Extraction and answer models are selected separately. The backend checks installed local models, excludes cloud entries, uses structured streamed JSON with thinking disabled, and serializes inference through a process-wide lock. Default keep-alive zero unloads weights after each call. Only progress events and the validated final answer reach the browser. There is no automatic pull or fallback generator. Deterministic doubles exist only under `backend/tests`.
 
@@ -56,4 +56,4 @@ Validated extraction caches are keyed by text, model tag, relationship vocabular
 
 ## Lifecycle and persistence
 
-SQLite uses WAL and per-operation connections. Query snapshots, settings, and evaluation records persist. Document deletion removes Neo4j facts/chunks/vectors, orphan entities, source files, and query/evaluation snapshots containing removed evidence. Back up graph and control data together. No cross-database atomic commit is possible; transient startup/index failures are surfaced, not hidden. Production entrypoint: `backend.api.main:app`; fixture entrypoint exists only under `backend/tests`.
+SQLite uses WAL and per-operation connections. Query snapshots, settings, and evaluation records persist. Document deletion removes Neo4j facts/chunks/vectors, orphan entities, source files, and query/evaluation snapshots containing removed evidence. Back up graph and control data together. No cross-database atomic commit is possible; transient startup/index failures are surfaced, not hidden. Failed schema startup retries on health/API checks, with a single initialization lock and 15-second cooldown. Recovery never resubmits document jobs. Settings snapshots copy the atomically replaced settings model without waiting for the long-running query lock, so health/model polling can continue during inference. Production entrypoint: `backend.api.main:app`; fixture entrypoint exists only under `backend/tests`.

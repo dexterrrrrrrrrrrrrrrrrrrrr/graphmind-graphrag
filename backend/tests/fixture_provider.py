@@ -1,6 +1,6 @@
 """Deterministic model double, imported only by tests. Never application inference."""
 
-from backend.models.schemas import Extraction
+from backend.models.schemas import Extraction, ExtractionResponse
 from backend.reasoning.answers import AnswerOutput
 from backend.reasoning.providers import Completion
 from backend.tests.literal_answer import local_answer
@@ -12,7 +12,7 @@ class FixtureProvider:
         self.settings = settings
 
     def json(self, system, data, schema, model=None):
-        if schema is Extraction:
+        if schema in (Extraction, ExtractionResponse):
             return Completion(
                 extract_literal_facts(data["untrusted_document"], self.settings.relationship_types)
             )

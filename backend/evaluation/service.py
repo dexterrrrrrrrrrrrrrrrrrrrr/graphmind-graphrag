@@ -24,7 +24,11 @@ def metrics(item, response, document_ids):
         else response.answer == INSUFFICIENT
     )
     expected_evidence = item["supporting_evidence"]
-    correct_citations = [e for e in response.citations if any(s in e.text for s in expected_evidence)]
+    correct_citations = [
+        e
+        for e in response.citations
+        if e.document_id in expected_docs and any(s in e.text for s in expected_evidence)
+    ]
     expected_edges = {tuple(e) for e in item["expected_relationships"]}
     path_correct = not expected_edges
     for path in response.paths:

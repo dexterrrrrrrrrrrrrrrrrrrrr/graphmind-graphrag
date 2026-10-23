@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -20,9 +20,30 @@ class RelationshipInput(BaseModel):
     confidence: float = Field(default=1, ge=0, le=1)
 
 
+class ExtractionResponse(BaseModel):
+    """Wire response: validate relationship items independently after JSON parsing.
+
+    Ollama still receives the full item schema, but one nonconforming item must
+    not prevent the application from validating the other candidates.
+    """
+
+    entities: list[EntityInput] = Field(default_factory=list, max_length=150)
+    relationships: list[Any] = Field(
+        default_factory=list,
+        max_length=250,
+        json_schema_extra={"items": RelationshipInput.model_json_schema()},
+    )
+
+
+class ExtractionRejection(BaseModel):
+    index: int = Field(ge=0)
+    reason: str
+
+
 class Extraction(BaseModel):
     entities: list[EntityInput] = Field(default_factory=list, max_length=150)
     relationships: list[RelationshipInput] = Field(default_factory=list, max_length=250)
+    rejected_relationships: list[ExtractionRejection] = Field(default_factory=list, max_length=250)
 
     @model_validator(mode="after")
     def references(self):

@@ -1,3 +1,7 @@
+> Current extraction-recovery validation: [ollama-extraction-recovery.md](ollama-extraction-recovery.md): 84 backend unit/API/protocol tests, 9 isolated real-Neo4j integration tests with mocked inference, 5 frontend tests, Ruff, TypeScript and production build passed. **Real Qwen3:4b end-to-end verification remains pending.**
+
+> Earlier engineering audit: [cloud-audit-report.md](cloud-audit-report.md). The initial publication results below are historical; the audit records the current rerun and additional regressions. Real Ollama acceptance is still pending.
+
 # Validation status for initial publication
 
 Date: 2026-10-23 (Asia/Kolkata). **Live Ollama/GraphRAG acceptance is pending.** The user authorized initial publication after non-LLM quality/security checks, with this limitation documented. Cloud model downloads are stopped; they are not a publication prerequisite.

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from backend.core.store import now
 from backend.ingestion.parsing import chunk_pages, parse
-from backend.knowledge_graph.extraction import extract, validate_extraction
+from backend.knowledge_graph.extraction import EXTRACTION_PROMPT_VERSION, extract, validate_extraction
 from backend.models.schemas import Extraction
 from backend.reasoning.providers import Provider
 
@@ -20,8 +20,9 @@ class Ingestor:
         document = self.store.document(document_id)
         if not document:
             return
-        existing_graph = bool(self.graph.read("MATCH (d:Document {id:$id}) RETURN d.id", id=document_id))
+        existing_graph = None
         try:
+            existing_graph = bool(self.graph.read("MATCH (d:Document {id:$id}) RETURN d.id", id=document_id))
             self.store.processing_metadata(document_id, settings)
             self.store.update_document(document_id, "parsing", 5)
             data = (self.store.directory / "uploads" / document_id).read_bytes()
@@ -32,6 +33,13 @@ class Ingestor:
             self.store.update_document(document_id, "extracting", 45, len(chunks))
             provider = Provider(settings)
             extractions = []
+            diagnostics = {
+                "prompt_version": EXTRACTION_PROMPT_VERSION,
+                "rejected_relationship_count": 0,
+                "details": [],
+                "details_limit": 50,
+            }
+            self.store.extraction_diagnostics(document_id, diagnostics)
             for i, chunk in enumerate(chunks):
                 cache_key = hashlib.sha256(
                     json.dumps(
@@ -40,7 +48,7 @@ class Ingestor:
                             "model": settings.extraction_model,
                             "types": settings.relationship_types,
                             "context": settings.ollama_context_length,
-                            "prompt_version": "ollama-v2",
+                            "prompt_version": EXTRACTION_PROMPT_VERSION,
                         },
                         sort_keys=True,
                     ).encode()
@@ -55,6 +63,12 @@ class Ingestor:
                 )
                 if cached is None:
                     self.store.extraction_cache(cache_key, value.model_dump(), document_id=document_id)
+                diagnostics["rejected_relationship_count"] += len(value.rejected_relationships)
+                for rejection in value.rejected_relationships:
+                    if len(diagnostics["details"]) < diagnostics["details_limit"]:
+                        diagnostics["details"].append({"chunk_id": chunk["id"], **rejection.model_dump()})
+                if value.rejected_relationships:
+                    self.store.extraction_diagnostics(document_id, diagnostics)
                 extractions.append(value)
                 chunk.update(
                     embedding=vectors[i], embedding_model=self.embedder.model_name, ingested_at=now()
@@ -69,7 +83,7 @@ class Ingestor:
             log.info("ingestion_complete document=%s chunks=%s", document_id, len(chunks))
         except Exception as error:
             try:
-                if not existing_graph:
+                if existing_graph is False:
                     self.graph.delete(document_id)
             except Exception:
                 log.error("failed_ingestion_cleanup_pending document=%s", document_id)

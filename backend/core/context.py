@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import RLock
+from threading import Lock, RLock
+from time import monotonic
 
 from backend.core.config import Settings
 from backend.core.store import Store
@@ -39,18 +40,34 @@ class Context:
         self.graph_ready = False
         self.startup_error = None
         self.embedding_error = None
+        self._graph_lock = Lock()
+        self._graph_retry_at = 0.0
 
     def initialize(self):
-        try:
-            self.graph.initialize()
-            self.graph_ready = True
-        except Exception as error:
-            self.startup_error = type(error).__name__
+        self.ensure_graph()
         for doc in self.store.documents():
             if doc["status"] not in ("ready", "failed"):
                 self.store.update_document(
                     doc["id"], "failed", 0, error="Processing interrupted; reprocess document"
                 )
+
+    def ensure_graph(self):
+        """Recover failed schema startup without concurrent retries or changing document jobs."""
+        if self.graph_ready or monotonic() < self._graph_retry_at:
+            return
+        if not self._graph_lock.acquire(blocking=False):
+            return
+        try:
+            if not self.graph_ready and monotonic() >= self._graph_retry_at:
+                try:
+                    self.graph.initialize()
+                    self.graph_ready = True
+                    self.startup_error = None
+                except Exception as error:
+                    self.startup_error = type(error).__name__
+                    self._graph_retry_at = monotonic() + 15
+        finally:
+            self._graph_lock.release()
 
     def warm_embeddings(self):
         try:
@@ -60,8 +77,9 @@ class Context:
             self.embedding_error = type(error).__name__
 
     def snapshot(self):
-        with self.lock:
-            return self.settings.model_copy(deep=True)
+        # Settings updates replace the entire model. Holding the operation lock here
+        # would block health/status polling for the duration of local generation.
+        return self.settings.model_copy(deep=True)
 
     def close(self):
         self.executor.shutdown(wait=True)

@@ -13,9 +13,12 @@ Errors have `{"error":{"code":"…","message":"…"}}`; validation errors also p
 | GET | /api/documents/{id}/status | Same metadata for polling |
 | GET | /api/documents/{id}/source | Attachment download, never executable inline document rendering |
 | DELETE | /api/documents/{id} | Delete source and evidence; 204; rejects active ingestion |
-| POST | /api/documents/{id}/reprocess | Remove stale evidence and queue with current configuration |
+| POST | /api/documents/{id}/reprocess | Queue with current configuration; preserve prior graph until validated replacement |
 | POST | /api/query | `{question, mode?, top_k?, max_depth?}`; omitted mode uses saved default |
 | POST | /api/query/compare | Vector and hybrid results under one settings snapshot; no silent fallback |
+| POST | /api/query/stream | SSE progress followed by one citation-validated answer or an explicit error |
+| GET | /api/ollama/status | Local connection, installed/loaded models and selected-model readiness |
+| GET | /api/ollama/models | Installed local models; cloud entries excluded |
 | GET | /api/queries | Bounded recent query history |
 | GET | /api/graph/stats | Graph counts |
 | GET | /api/graph/entities | Bounded `search`, `type`, `document_id`, `offset`, `limit` filters |
@@ -30,9 +33,9 @@ Errors have `{"error":{"code":"…","message":"…"}}`; validation errors also p
 | GET | /api/analytics/overview | Live counts, retained query count, recent activity, ingestion states |
 | GET | /api/analytics/latency | Mean, P50/P95, samples and available token totals (last 1,000 queries) |
 | GET | /api/analytics/retrieval | Mode distribution, evidence counts, empty retrievals and evaluation summaries |
-| GET | /api/settings | Nonsecret editable settings, model ID, credential presence booleans |
+| GET | /api/settings | Nonsecret editable settings, model IDs and upload/retrieval configuration |
 | PATCH | /api/settings | Validated allowlisted nonsecret updates; persisted locally |
 
-Query response fields: ID, question, answer, requested mode, selected strategy and routing reason, explicit fallback (`null` when none), retrieved evidence with scores/source kinds, verified source citations, database-derived paths, retrieval/total latency, available token counts, optional estimated cost, provider/model and warnings. In offline mode, responses state explicitly that no LLM was used. Successful request execution does not guarantee answerable evidence.
+Query response fields: ID, question, answer, requested mode, selected strategy and routing reason, explicit fallback (`null` when none), retrieved evidence with scores/source kinds, verified source citations, database-derived paths, retrieval/total latency, available token counts, optional estimated cost, provider/model and warnings. Ollama is the sole inference provider; empty evidence returns the insufficient-evidence response without inference. Successful request execution does not guarantee answerable evidence.
 
-Modes are `vector`, `graph`, `hybrid`, `auto`. Graph depth is capped at five. Explicit mode errors propagate; benchmark rows record failures. Query and benchmark endpoints do not stream: they validate complete structured output before returning.
+Modes are `vector`, `graph`, `hybrid`, `auto`. Graph depth is capped at five. Explicit mode errors propagate; benchmark rows record failures. `/api/query/stream` sends SSE loading/generation progress and only exposes the final answer after schema/citation validation. Ordinary query, comparison and benchmark endpoints return complete JSON. No unverified draft tokens reach the browser.

@@ -2,7 +2,7 @@
 
 A fully local GraphRAG application using **Ollama, Neo4j, and hybrid vector–graph retrieval** for explainable multi-hop document questions. The existing React dashboard has seven pages: overview, documents, questions, graph explorer, comparison lab, analytics, and settings.
 
-**Initial publication status:** non-LLM and mocked-inference validation is documented in [docs/validation.md](docs/validation.md). **Real Ollama extraction, grounded answers, and end-to-end GraphRAG acceptance remain pending.** Do not interpret passing mocked tests or historical demonstration records as live-model validation. Cloud weight downloads were stopped after repeated executor failures; no performance improvement is claimed.
+**Validation status:** non-LLM and mocked-inference validation is documented in [docs/validation.md](docs/validation.md). **Real Ollama extraction, grounded answers, and end-to-end GraphRAG acceptance remain pending.** Do not interpret passing mocked tests or historical demonstration records as live-model validation. Cloud weight downloads were stopped after repeated executor failures; no performance improvement is claimed. The [cloud engineering audit](docs/cloud-audit-report.md) records targeted fixes and remaining risks; [extraction recovery](docs/ollama-extraction-recovery.md) documents the subsequent partial-response fix, current test results and Mac rerun instructions.
 
 Both extraction and answer generation default to **`qwen3:4b`**, sharing one local weight installation. `EXTRACTION_MODEL` and `LLM_MODEL` remain independently configurable, including through installed-model selection in Settings. Gemini, OpenAI, paid inference APIs, API-key requirements, and deterministic production inference are absent.
 
@@ -127,10 +127,10 @@ Back up Neo4j named volumes and `.data` together: `.data` contains SQLite, origi
 
 - **Ollama unavailable:** start it; check `/api/tags` from the backend network. Docker localhost is its own container; use the host gateway and the documented host bind/firewall configuration.
 - **Missing model:** manually install the tag or select an installed local model. No cloud entry, auto-pull or fallback is used.
-- **Readiness after restart:** wait for Neo4j, then restart the backend if initialization ran before the database was available. Do not reset data/passwords.
+- **Readiness after restart:** failed schema startup is retried on health/API checks with a 15-second cooldown and a single initialization lock. Wait for Neo4j and check readiness again. Do not reset data/passwords.
 - **Stale proxy after cloud recovery:** inspect current proxy/CA readiness and recreate only affected runtime containers with preserved mounts. Do not retry large downloads or bypass denied destinations.
 - **OOM/slow inference:** lower context or choose a smaller installed model. Requests serialize and unload by default, trading latency for RAM.
-- **Malformed JSON/extraction:** the job fails visibly instead of inventing facts. Verify structured-output support locally and inspect safe diagnostics.
+- **Malformed JSON/extraction:** unusable response/entity data fails visibly. Invalid individual relationships are discarded with document metadata/UI warnings while valid facts are retained. A ready document can still have incomplete graph coverage. See the extraction recovery guide; no missing edge is invented.
 - **No answer/path:** inspect real extracted facts, exact entity names, threshold/depth and evidence budget. OCR and automatic identity disambiguation are out of scope.
 
 This local research application has no built-in user authentication or distributed job queue. Add an authenticated gateway for network deployment. Never expose Ollama/Neo4j publicly. `.gitignore` excludes secrets, stores, weights and temporary outputs. Future work includes entailment evaluation, larger annotated datasets, OCR, local cross-encoder reranking and durable scheduling. All live-model quality and Apple Silicon performance claims remain pending until measured.

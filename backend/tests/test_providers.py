@@ -105,3 +105,43 @@ def test_transient_ollama_error_is_retried(monkeypatch):
         "JSON", {}, Extraction
     )
     assert result.value.entities == [] and calls.count("/api/tags") == 2
+
+
+@pytest.mark.parametrize("payload", [[], {"message": []}, {"message": {"content": 7}}])
+def test_invalid_protocol_events_fail_closed(payload):
+    underlying = transport_for().handler
+
+    def handler(request):
+        if request.url.path == "/api/chat":
+            return httpx.Response(200, text=json.dumps(payload) + "\n")
+        return underlying(request)
+
+    with pytest.raises(ProviderError):
+        Provider(Settings(llm_model="test-model"), httpx.MockTransport(handler)).json("JSON", {}, Extraction)
+
+
+@pytest.mark.parametrize(
+    "counts", [{}, {"prompt_eval_count": -1, "eval_count": 3}, {"prompt_eval_count": "10", "eval_count": 3}]
+)
+def test_missing_or_invalid_usage_is_unavailable_not_fabricated_zero(counts):
+    underlying = transport_for().handler
+
+    def handler(request):
+        if request.url.path == "/api/chat":
+            return httpx.Response(
+                200,
+                text=json.dumps(
+                    {
+                        "message": {"content": '{"entities":[],"relationships":[]}'},
+                        "done": True,
+                        **counts,
+                    }
+                )
+                + "\n",
+            )
+        return underlying(request)
+
+    result = Provider(Settings(llm_model="test-model"), httpx.MockTransport(handler)).json(
+        "JSON", {}, Extraction
+    )
+    assert result.value.entities == [] and result.usage is None

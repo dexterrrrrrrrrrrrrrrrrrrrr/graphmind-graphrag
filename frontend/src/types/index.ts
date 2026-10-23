@@ -6,6 +6,9 @@ export const modes: Record<Mode, string> = {
   hybrid: "Hybrid GraphRAG",
 };
 export interface Document {
+  processing_metadata?: {
+    extraction_diagnostics?: { rejected_relationship_count: number };
+  };
   id: string;
   name: string;
   status: string;

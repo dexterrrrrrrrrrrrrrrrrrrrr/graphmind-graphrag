@@ -206,3 +206,70 @@ def test_live_sentence_transformer_acceptance(tmp_path):
         for id in ids:
             graph.delete(id)
         graph.driver.close()
+
+
+@pytest.mark.parametrize("depth", [1, 2, 3])
+def test_hop_bounds_direction_and_provenance(live_graph, depth):
+    graph, _, _, ids, _ = live_graph
+    paths = graph.traverse(graph.link("Rahul Sharma"), depth, 20)
+    longest = max(paths, key=lambda p: len(p.edges))
+    assert len(longest.edges) == depth
+    assert [n.name for n in longest.nodes] == ["Rahul Sharma", "AlphaTech", "DataVision", "MedCore"][
+        : depth + 1
+    ]
+    for i, edge in enumerate(longest.edges):
+        assert (edge.source, edge.target) == (longest.nodes[i].id, longest.nodes[i + 1].id)
+        evidence = graph.evidence([edge.chunk_id])
+        assert len(evidence) == 1
+        assert evidence[0].document_id == edge.document_id == ids[i]
+        assert edge.evidence in evidence[0].text
+    reverse = graph.traverse(graph.link("MedCore"), depth, 20)
+    # Retrieval can follow incoming edges; semantic direction must never be reversed.
+    for path in reverse:
+        for i, edge in enumerate(path.edges):
+            assert (edge.source, edge.target) == (path.nodes[i + 1].id, path.nodes[i].id)
+    assert graph.traverse(graph.link("Rahul Sharma"), depth, 20, allowed=["OWNS"]) == []
+    filtered = graph.traverse(graph.link("Rahul Sharma"), depth, 20, document_id=ids[0])
+    assert filtered and all(len(p.edges) == 1 and p.edges[0].document_id == ids[0] for p in filtered)
+
+
+def test_actual_cycle_never_repeats_nodes_or_exceeds_depth(live_graph):
+    graph, store, settings, ids, ingestor = live_graph
+    id = str(uuid4())
+    ids.append(id)  # The fixture owns cleanup of this additional source document.
+    data = b"MedCore owns AlphaTech."
+    (store.directory / "uploads" / id).write_bytes(data)
+    store.create_document(id, "cycle.txt", hashlib.sha256(data).hexdigest(), len(data), "text/plain")
+    ingestor.run(id, settings)
+    assert store.document(id)["status"] == "ready"
+    assert graph.stats()["relationships"] == 4
+    paths = graph.traverse(graph.link("Rahul Sharma"), 5, 20)
+    assert paths and all(len({n.id for n in p.nodes}) == len(p.nodes) for p in paths)
+    assert all(len(p.edges) <= 3 for p in paths)  # Four nodes; no cyclic revisit is allowed.
+    keys = [tuple(e.id for e in p.edges) for p in paths]
+    assert len(keys) == len(set(keys))
+
+
+def test_partially_invalid_ollama_response_persists_valid_partnership(live_graph, monkeypatch):
+    from backend.tests.test_partial_extraction import ENTITIES, VALID, provider_for
+
+    graph, store, settings, ids, ingestor = live_graph
+    before = graph.stats()
+    provider = provider_for(
+        {
+            "entities": ENTITIES,
+            "relationships": [{**VALID, "target": "e1"}, {**VALID, "target": "unknown"}, VALID],
+        }
+    )
+    monkeypatch.setattr("backend.ingestion.service.Provider", lambda settings: provider)
+    # Force inference for this test only with a different context cache key.
+    ingestor.run(ids[2], settings.model_copy(update={"ollama_context_length": 8192}))
+    document = store.document(ids[2])
+    assert document["status"] == "ready"
+    assert document["processing_metadata"]["extraction_diagnostics"]["rejected_relationship_count"] == 2
+    assert graph.stats() == before
+    paths = graph.traverse(graph.link("Rahul Sharma"), 3, 20)
+    assert any(
+        [n.name for n in p.nodes] == ["Rahul Sharma", "AlphaTech", "DataVision", "MedCore"] for p in paths
+    )
+    assert not graph.read("MATCH (e:Entity)-[r:FACT]->(e) RETURN r.id")

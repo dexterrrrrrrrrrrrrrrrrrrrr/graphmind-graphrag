@@ -32,6 +32,8 @@ test("upload → three-hop answer → graph provenance → comparison → benchm
     "aria-label",
     /4 entities and 3 relationships/,
   );
+  await page.getByRole("textbox", { name: "Search entities" }).fill("Rahul");
+  await expect(page.locator(".graph-canvas")).toHaveAttribute("aria-label", /1 entities and 0 relationships/);
   await page.getByRole("link", { name: "Comparison lab" }).click();
   await page
     .getByRole("textbox", { name: "Comparison question" })

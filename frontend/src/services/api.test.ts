@@ -28,3 +28,24 @@ it("supports deletion with no content", async () => {
     api("/documents/id", { method: "DELETE" }),
   ).resolves.toBeUndefined();
 });
+
+it("accepts only the final answer from fragmented inference events", async () => {
+  const { streamQuestion } = await import("./api");
+  const encoder = new TextEncoder();
+  const wire = ': keepalive\n\ndata: {"event":"loading","data":{"model":"fixture"}}\n\ndata: {"event":"answer","data":{"answer":"validated fixture"}}\n\n';
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new ReadableStream({
+    start(controller) {
+      for (let i = 0; i < wire.length; i += 7) controller.enqueue(encoder.encode(wire.slice(i, i + 7)));
+      controller.close();
+    },
+  }))));
+  const progress = vi.fn();
+  await expect(streamQuestion({}, progress)).resolves.toEqual({answer: "validated fixture"});
+  expect(progress).toHaveBeenCalledWith("Loading local model fixture…");
+});
+
+it("rejects interrupted streams without displaying a draft answer", async () => {
+  const { streamQuestion } = await import("./api");
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response('data: {"event":"generating","data":{"model":"fixture"}}\n\n')));
+  await expect(streamQuestion({}, vi.fn())).rejects.toThrow("before a validated answer");
+});

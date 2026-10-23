@@ -142,12 +142,19 @@ class Provider:
                             raise ProviderError("Ollama inference exceeded the request timeout")
                         if not line:
                             continue
-                        payload = json.loads(line)
+                        try:
+                            payload = json.loads(line)
+                        except ValueError as error:
+                            raise ProviderError("Ollama returned malformed stream JSON") from error
+                        if not isinstance(payload, dict) or not isinstance(payload.get("message", {}), dict):
+                            raise ProviderError("Ollama returned an invalid stream event")
                         if payload.get("error"):
                             raise ProviderError(
                                 "Ollama inference failed; check model compatibility and available memory."
                             )
                         content = payload.get("message", {}).get("content", "")
+                        if not isinstance(content, str):
+                            raise ProviderError("Ollama returned invalid message content")
                         total += len(content)
                         if total > 1_000_000:
                             raise ProviderError("Ollama output exceeded the safety limit")
@@ -161,10 +168,10 @@ class Provider:
                                 raise ProviderError(
                                     "Ollama output was truncated. Increase the output token limit or reduce the context."
                                 )
-                            counts = {
-                                "input_tokens": payload.get("prompt_eval_count", 0),
-                                "output_tokens": payload.get("eval_count", 0),
-                            }
+                            measured = [payload.get("prompt_eval_count"), payload.get("eval_count")]
+                            if all(type(n) is int and n >= 0 for n in measured):
+                                counts = dict(zip(("input_tokens", "output_tokens"), measured))
+                            break
                     if not done:
                         raise ProviderError("Ollama stream ended before completion; no answer was accepted")
             return Completion(schema.model_validate_json("".join(parts)), counts)

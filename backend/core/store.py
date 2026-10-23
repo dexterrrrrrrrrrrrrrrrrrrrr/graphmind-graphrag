@@ -172,3 +172,12 @@ class Store:
                 return value
             row = db.execute("SELECT payload FROM extraction_cache WHERE key=?", (key,)).fetchone()
             return json.loads(row[0]) if row else None
+
+    def extraction_diagnostics(self, document_id, diagnostics):
+        """Persist safe partial-extraction warnings alongside the document status."""
+        with self.connection() as db:
+            db.execute(
+                "UPDATE documents SET processing_metadata=json_set(processing_metadata, "
+                "'$.extraction_diagnostics', json(?)) WHERE id=?",
+                (json.dumps(diagnostics), document_id),
+            )

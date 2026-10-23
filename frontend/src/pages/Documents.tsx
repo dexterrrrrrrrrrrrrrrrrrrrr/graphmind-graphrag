@@ -139,6 +139,13 @@ export function Documents() {
                         <a href={`/api/documents/${d.id}/source`}>{d.name}</a>
                       </div>
                       {d.error && <p className="error-text">{d.error}</p>}
+                      {!!d.processing_metadata?.extraction_diagnostics?.rejected_relationship_count && (
+                        <p className="notice" role="status">
+                          {d.processing_metadata.extraction_diagnostics.rejected_relationship_count} invalid
+                          relationship(s) discarded. Valid extracted facts were retained; graph coverage
+                          may be incomplete. Details are available in document metadata.
+                        </p>
+                      )}
                     </td>
                     <td>
                       <span className={`status ${d.status}`}>{d.status}</span>

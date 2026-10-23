@@ -36,12 +36,14 @@ def verify_claims(output, evidence):
     valid, used = [], set()
     for claim in output.claims:
         ids = set(claim.citation_ids)
-        quotes = {
-            q.chunk_id
-            for q in claim.quotes
-            if q.chunk_id in by_id and q.text.strip() and q.text in by_id[q.chunk_id].text
-        }
-        if ids and ids <= set(by_id) and ids <= quotes and all(q.chunk_id in ids for q in claim.quotes):
+        quotes = {q.chunk_id for q in claim.quotes}
+        if (
+            claim.text.strip()
+            and ids
+            and ids == quotes
+            and ids <= set(by_id)
+            and all(q.text.strip() and q.text in by_id[q.chunk_id].text for q in claim.quotes)
+        ):
             valid.append(claim)
             used |= ids
     return valid, [e for e in evidence if e.chunk_id in used]

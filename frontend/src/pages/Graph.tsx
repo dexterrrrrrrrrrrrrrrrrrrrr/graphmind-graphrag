@@ -21,7 +21,8 @@ export function Graph() {
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<Node | Edge | null>(null);
   const location = useLocation();
-  const highlighted = (location.state as { paths?: Path[] } | null)?.paths;
+  const [showPaths, setShowPaths] = useState(true);
+  const highlighted = showPaths ? (location.state as { paths?: Path[] } | null)?.paths : undefined;
   const q = useQuery({
     queryKey: ["graph", search, doc, type, offset],
     queryFn: () =>
@@ -77,6 +78,7 @@ export function Graph() {
         description="Inspect database relationships and the exact document evidence behind them."
         action={<Badge>Bounded subgraph · 60 nodes / 300 edges</Badge>}
       />
+      {highlighted && <p className="notice">Showing retrieved reasoning paths. <Button variant="outline" onClick={() => setShowPaths(false)}>Return to full graph</Button></p>}
       <div className="toolbar">
         <label className="search">
           <Search size={16} />
@@ -85,6 +87,7 @@ export function Graph() {
             placeholder="Search entities…"
             value={search}
             onChange={(e) => {
+              setShowPaths(false);
               setSearch(e.target.value);
               setOffset(0);
             }}
@@ -94,6 +97,7 @@ export function Graph() {
           aria-label="Filter by entity type"
           value={type}
           onChange={(e) => {
+            setShowPaths(false);
             setType(e.target.value);
             setOffset(0);
           }}
@@ -116,6 +120,7 @@ export function Graph() {
           aria-label="Filter by document"
           value={doc}
           onChange={(e) => {
+            setShowPaths(false);
             setDoc(e.target.value);
             setOffset(0);
           }}
@@ -130,7 +135,7 @@ export function Graph() {
         <Button
           variant="outline"
           aria-label="Previous graph page"
-          disabled={!offset}
+          disabled={!!highlighted || !offset}
           onClick={() => setOffset(Math.max(0, offset - 60))}
         >
           <ChevronLeft size={16} />
@@ -138,7 +143,7 @@ export function Graph() {
         <Button
           variant="outline"
           aria-label="Next graph page"
-          disabled={(q.data?.nodes.length ?? 0) < 60}
+          disabled={!!highlighted || (q.data?.nodes.length ?? 0) < 60}
           onClick={() => setOffset(offset + 60)}
         >
           <ChevronRight size={16} />
